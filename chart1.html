@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Graph Visualization - Variables and Relationships</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 100vw;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+            gap: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 10px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .controls button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .controls button:hover {
+            background: #2980b9;
+        }
+        
+        .search-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .search-input {
+            border: none;
+            outline: none;
+            padding: 5px;
+            font-size: 14px;
+            width: 200px;
+        }
+        
+        .search-clear {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            display: none;
+        }
+        
+        .search-results {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .search-result-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .search-result-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        #network {
+            width: 100%;
+            height: 80vh;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .main {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        
+        #relationsPanel {
+            width: 320px;
+            height: 80vh;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .rel-header {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .rel-list {
+            overflow: auto;
+            padding: 8px 8px 12px 8px;
+            flex: 1;
+        }
+        
+        .rel-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: default;
+            font-size: 12px;
+            color: #333;
+        }
+        
+        .rel-item:hover {
+            background: #f6f9fc;
+        }
+        
+        .rel-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 240px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+        
+        .rel-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 10px;
+            padding: 0 6px;
+            font-size: 11px;
+            margin-left: 8px;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            font-size: 12px;
+            max-width: 200px;
+        }
+        
+        .node {
+            stroke: #fff;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+        
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+            stroke-width: 1px;
+            marker-end: url(#arrowhead);
+        }
+        
+        .node-label {
+            font-size: 8px;
+            /* font-weight: bold; */
+            fill: #333;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Réseau de Variables et Relations</h1>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e74c3c;"></div>
+                <span>Processuelle</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f39c12;"></div>
+                <span>Économique</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #2ecc71;"></div>
+                <span>Sociétale</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #9b59b6;"></div>
+                <span>Personnelle</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3498db;"></div>
+                <span>Intellectuelle</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #1abc9c;"></div>
+                <span>Sociale</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <!-- <div class="search-container">
+                <input type="text" class="search-input" placeholder="搜索节点 (例如: Pe1, I4a, 或关键词)" 
+                       oninput="handleSearch()" onkeydown="handleSearchKeydown(event)">
+                <button class="search-clear" onclick="clearSearch()">&times;</button>
+                <div class="search-results" id="searchResults"></div>
+            </div> -->
+            <button onclick="restartSimulation()">Restart Animation</button>
+            <button onclick="centerGraph()">Center Graph</button>
+            <button onclick="toggleLabels()">Toggle Labels</button>
+            <button onclick="toggleHubs()">Toggle Hubs</button>
+            <!-- <button onclick="clearHighlight()">Clear Highlight</button> -->
+        </div>
+        
+        <div class="main">
+            <svg id="network" style="flex: 1 1 auto;"></svg>
+            <div id="relationsPanel">
+                <div id="relationsList" class="rel-list"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tooltip"></div>
+
+    <script>
+        // Data structure
+        const variables = {
+            // Processuelle (P1-P2)
+            "P1": { name: "P1: Accumulation connaissance", category: "Processuelle" },
+            "P2": { name: "P2: Effets dans l'avenir ou transversaux", category: "Processuelle" },
+
+            // Économique (E1-E3)
+            "E1": { name: "E1: Réseau professionnel", category: "Économique" },
+            "E2": { name: "E2: Promouvoir culture", category: "Économique" },
+            "E3": { name: "E3: Opportunités culturelles", category: "Économique" },
+
+            // Sociétale (S1-S3)
+            "S1": { name: "S1: Accessibilité et quotidien", category: "Sociétale" },
+            "S2a": { name: "S2a: Diversité des formes artistiques et culturelles proposées", category: "Sociétale" },
+            "S2b": { name: "S2b: Diversité dans la culture française", category: "Sociétale" },
+            "S3": { name: "S3: Inclusion et intégration", category: "Sociétale" },
+
+            // Personnelle (Pe1-Pe4)
+            "Pe1": { name: "Pe1: Bien-être", category: "Personnelle" },
+            "Pe2a": { name: "Pe2a: Sens personnel", category: "Personnelle" },
+            "Pe2b": { name: "Pe2b: Intérêt, curiosité ou un goût envers l'art", category: "Personnelle" },
+            "Pe2c": { name: "Pe2c: Envie de poursuivre", category: "Personnelle" },
+            "Pe3a": { name: "Pe3a: Ressentis ou émotions", category: "Personnelle" },
+            "Pe3b": { name: "Pe3b: Ressentis ou émotions intenses", category: "Personnelle" },
+            "Pe4a": { name: "Pe4a: Autonomie", category: "Personnelle" },
+            "Pe4b": { name: "Pe4b: Engagement de l'individu", category: "Personnelle" },
+            "Pe4c": { name: "Pe4c: Suivre l'intérêt personnel", category: "Personnelle" },
+            "Pe4d": { name: "Pe4d: Personnalité (curiosité; ouverture)", category: "Personnelle" },
+            "Pe4e": { name: "Pe4e: Toi-même", category: "Personnelle" },
+            "Pe4f": { name: "Pe4f: Liberté, improvisation", category: "Personnelle" },
+
+            // Intellectuelle (I1-I6)
+            "I1": { name: "I1: Attention", category: "Intellectuelle" },
+            "I2": { name: "I2: Imagination", category: "Intellectuelle" },
+            "I3": { name: "I3: Réflexion", category: "Intellectuelle" },
+            "I4a": { name: "I4a: Ouverture d'esprit", category: "Intellectuelle" },
+            "I4b": { name: "I4b: (Sa propre) compréhension envers l'art et la culture", category: "Intellectuelle" },
+            "I4c": { name: "I4c: Exemples contre la compréhension", category: "Intellectuelle" },
+            "I4d": { name: "I4d: Conscience de sa limite de connaissance et sa limite physique", category: "Intellectuelle" },
+            "I5": { name: "I5: Mise en liens des choses différentes", category: "Intellectuelle" },
+            "I6a": { name: "I6a: Connaissance ou technique spécifique en arts", category: "Intellectuelle" },
+            "I6b": { name: "I6b: Connaissance artistique et culturelle générale", category: "Intellectuelle" },
+
+            // Sociale (So1-So5)
+            "So1a": { name: "So1a: Médiation", category: "Sociale" },
+            "So1b": { name: "So1b: Langue", category: "Sociale" },
+            "So2a": { name: "So2a: Confiance en soi", category: "Sociale" },
+            "So2b": { name: "So2b: Anticipation", category: "Sociale" },
+            "So2c": { name: "So2c: Empathie", category: "Sociale" },
+            "So2d": { name: "So2d: Courage", category: "Sociale" },
+            "So2e": { name: "So2e: Patience", category: "Sociale" },
+            "So2f": { name: "So2f: Responsabilité", category: "Sociale" },
+            "So3a": { name: "So3a: Connexion", category: "Sociale" },
+            "So3b": { name: "So3b: Rencontrer des gens intérêt commun", category: "Sociale" },
+            "So3c": { name: "So3c: Engagement collectif", category: "Sociale" },
+            "So4a": { name: "So4a: Habitudes académiques et professionnelles", category: "Sociale" },
+            "So4b": { name: "So4b: habitudes de l'artiste", category: "Sociale" },
+            "So4c": { name: "So4c: Habitudes de pratique artistique dans l'avenir", category: "Sociale" },
+            "So4d": { name: "So4d: Habitudes dans la vie quotidienne", category: "Sociale" },
+            "So5": { name: "So5: Interculturel", category: "Sociale" }
+        };
+
+        // Parse relationships from user-provided chains to preserve multi-level progression (A->B->C, without A->C)
+        const rawRelations = `
+I4c-I6b
+I4c-Pe2a
+I4c-I4a
+I5-I4a-Pe3a
+I4c-Pe2a
+I4c-I4a
+I5-I4a-Pe3a
+I4c-I4b
+I4c-I2
+I4c-I3
+I4c-So4c
+I4c-Pe3a
+Pe3a-So2f
+Pe3b-Pe1
+So1b-I4b
+So1b-I4a
+So1b-So5-I4a
+Pe3b-Pe4e
+Pe3b-Pe2a
+Pe3b-So3c
+I6a-I4d
+I6a-So5
+So1b-S3
+So4d-S3
+I6b-So3a
+I6b-S3
+I4c-I4b
+I4c-P1
+So3c-Pe4b
+So3a-Pe4d
+Pe3b-Pe4e-S1
+Pe3b-I4b-Pe4b
+Pe3b-So2c
+I6b-So2c-Pe2c
+S3-I4d-Pe2c
+So5-So4d
+Pe4d-So4d
+I6b-Pe2c
+Pe3b-Pe2c
+So4c-I6b
+So4c-I4b
+I6b-I4b
+So5-Pe4e
+I6b-I3-I4b
+So5-So4d
+I6b-So2a-I4b
+So3c-So5-I3
+E3-I6b
+P1-I4b
+Pe3b-Pe2b-Pe2c
+I5-P1
+I4a-Pe1
+        `;
+
+        function parseRelations(raw) {
+            const lines = raw.split(/\n+/).map(l => l.trim()).filter(Boolean);
+            const pairs = [];
+            for (const line of lines) {
+                const parts = line.split('-').map(t => t.trim()).filter(Boolean);
+                for (let i = 0; i < parts.length - 1; i++) {
+                    pairs.push([parts[i], parts[i + 1]]);
+                }
+            }
+            // Deduplicate
+            const seen = new Set();
+            const uniquePairs = [];
+            for (const [a, b] of pairs) {
+                const key = `${a}->${b}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    uniquePairs.push([a, b]);
+                }
+            }
+            return uniquePairs;
+        }
+
+        const relationships = parseRelations(rawRelations);
+
+        // Build unique chain list with duplicate counts for UI panel
+        function buildChains(raw) {
+            const lines = raw.split(/\n+/).map(l => l.trim()).filter(Boolean);
+            const countMap = new Map();
+            for (const line of lines) {
+                const normalized = line.replace(/\s+/g, '');
+                countMap.set(normalized, (countMap.get(normalized) || 0) + 1);
+            }
+            return Array.from(countMap.entries()).map(([chain, count]) => ({ chain, count }));
+        }
+
+        const chainsWithCount = buildChains(rawRelations);
+
+        // Color mapping for categories
+        const colorMap = {
+            "Processuelle": "#e74c3c",
+            "Économique": "#f39c12", 
+            "Sociétale": "#2ecc71",
+            "Personnelle": "#9b59b6",
+            "Intellectuelle": "#3498db",
+            "Sociale": "#1abc9c"
+        };
+
+        // Create nodes and links arrays for D3
+        const nodes = Object.keys(variables).map(id => ({
+            id: id,
+            name: variables[id].name,
+            category: variables[id].category,
+            color: colorMap[variables[id].category]
+        }));
+
+        const links = relationships.map(rel => ({ source: rel[0], target: rel[1] }));
+
+        // Compute degree (in/out/total) for each node to detect hubs
+        const degreeById = new Map(nodes.map(n => [n.id, { in: 0, out: 0, total: 0 }]));
+        links.forEach(l => {
+            const s = typeof l.source === 'string' ? l.source : l.source.id;
+            const t = typeof l.target === 'string' ? l.target : l.target.id;
+            if (degreeById.has(s)) degreeById.get(s).out++;
+            if (degreeById.has(t)) degreeById.get(t).in++;
+        });
+        degreeById.forEach(v => { v.total = v.in + v.out; });
+
+        // Determine hub threshold: 90th percentile or at least 3 connections
+        const degreeValuesSorted = nodes.map(n => degreeById.get(n.id).total).sort(d3.ascending);
+        const q90 = d3.quantile(degreeValuesSorted, 0.9) || 0;
+        const hubThreshold = Math.max(3, Math.ceil(q90));
+        let hubSet = new Set(nodes.filter(n => degreeById.get(n.id).total >= hubThreshold).map(n => n.id));
+        if (hubSet.size < 3) {
+            const top = nodes
+                .map(n => ({ id: n.id, deg: degreeById.get(n.id).total }))
+                .filter(d => d.deg > 0)
+                .sort((a, b) => b.deg - a.deg)
+                .slice(0, 3)
+                .map(d => d.id);
+            top.forEach(id => hubSet.add(id));
+        }
+
+        let showHubs = false;
+
+        // Compute layered levels from edges to reflect progression (left -> right)
+        function computeLevels(nodesArr, linksArr) {
+            const nodeIds = new Set(nodesArr.map(n => n.id));
+            const adj = new Map();
+            const inDegree = new Map();
+            const level = new Map();
+
+            nodeIds.forEach(id => {
+                adj.set(id, []);
+                inDegree.set(id, 0);
+                level.set(id, 0);
+            });
+
+            for (const { source, target } of linksArr) {
+                if (!nodeIds.has(source) || !nodeIds.has(target)) continue;
+                adj.get(source).push(target);
+                inDegree.set(target, (inDegree.get(target) || 0) + 1);
+            }
+
+            const queue = [];
+            inDegree.forEach((deg, id) => { if (deg === 0) queue.push(id); });
+
+            while (queue.length) {
+                const u = queue.shift();
+                for (const v of adj.get(u)) {
+                    if (level.get(v) < level.get(u) + 1) level.set(v, level.get(u) + 1);
+                    inDegree.set(v, inDegree.get(v) - 1);
+                    if (inDegree.get(v) === 0) queue.push(v);
+                }
+            }
+
+            // For nodes possibly in cycles, keep their initialized level 0
+            return level;
+        }
+
+        const levelById = computeLevels(nodes, links);
+
+        // Set up SVG
+        // Reserve space for the right panel (~360px incl. gap)
+        const rightPanelWidth = 340 + 20; // panel + gap
+        const width = Math.max(600, window.innerWidth - 40 - rightPanelWidth);
+        const height = window.innerHeight * 0.8;
+
+        const svg = d3.select("#network")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Now that width is available, build level scale
+        const maxLevel = Math.max(0, ...Array.from(levelById.values()));
+        const levelScale = d3.scaleLinear()
+            .domain([0, Math.max(1, maxLevel)])
+            .range([50, width - 50]);
+
+        // Create zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", handleZoom);
+
+        svg.call(zoom);
+
+        // Add arrow marker definitions
+        const defs = svg.append("defs");
+
+        // Normal arrow marker
+        defs.append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 15)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#999");
+
+        // Highlighted arrow marker
+        defs.append("marker")
+            .attr("id", "arrowhead-highlight")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 15)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#ff6b6b");
+
+        const g = svg.append("g");
+
+        // Tooltip
+        const tooltip = d3.select(".tooltip");
+
+        // Sidebar population and hover interactions
+        const relationsListEl = document.getElementById('relationsList');
+        function renderRelationsList() {
+            if (!relationsListEl) return;
+            relationsListEl.innerHTML = '';
+            chainsWithCount.forEach(({ chain, count }) => {
+                const item = document.createElement('div');
+                item.className = 'rel-item';
+                const text = document.createElement('div');
+                text.className = 'rel-text';
+                text.textContent = chain;
+                item.appendChild(text);
+                if (count > 1) {
+                    const countEl = document.createElement('div');
+                    countEl.className = 'rel-count';
+                    countEl.textContent = `×${count}`;
+                    item.appendChild(countEl);
+                }
+                // Hover to highlight the specific chain path
+                item.addEventListener('mouseenter', () => highlightChain(chain));
+                item.addEventListener('mouseleave', () => clearHighlight());
+                relationsListEl.appendChild(item);
+            });
+        }
+
+        // Create force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(links).id(d => d.id).distance(40))
+            .force("charge", d3.forceManyBody().strength(-100))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(12))
+            .force("x", d3.forceX(d => levelScale(levelById.get(d.id) || 0)).strength(0.4))
+            .force("y", d3.forceY(height / 2).strength(0.08));
+
+        // Create links
+        const link = g.append("g")
+            .selectAll("line")
+            .data(links)
+            .join("line")
+            .attr("class", "link");
+
+        // Create nodes
+        const getBaseRadius = d => Math.max(5, Math.min(15, d.name.length / 8));
+
+        const node = g.append("g")
+            .selectAll("circle")
+            .data(nodes)
+            .join("circle")
+            .attr("class", "node")
+            .attr("r", d => getBaseRadius(d))
+            .attr("fill", d => d.color)
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut);
+
+        // Create labels
+        let showLabels = true;
+        const labels = g.append("g")
+            .selectAll("text")
+            .data(nodes)
+            .join("text")
+            .attr("class", "node-label")
+            .text(d => d.id)
+            .style("display", showLabels ? "block" : "none");
+
+        // Update positions on simulation tick
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y + 4);
+        });
+
+        // Apply or clear hub highlighting styles
+        function updateHubStyles() {
+            if (!showHubs) {
+                node
+                    .attr("r", d => getBaseRadius(d))
+                    .style("stroke-width", 2)
+                    .style("stroke", "#fff");
+                labels
+                    .style("font-weight", "normal")
+                    .style("font-size", "8px");
+                return;
+            }
+            node
+                .attr("r", d => getBaseRadius(d) + (hubSet.has(d.id) ? 3 : 0))
+                .style("stroke-width", d => hubSet.has(d.id) ? 3 : 2)
+                .style("stroke", d => hubSet.has(d.id) ? "#f1c40f" : "#fff");
+            labels
+                .style("font-weight", d => hubSet.has(d.id) ? "bold" : "normal")
+                .style("font-size", d => hubSet.has(d.id) ? "10px" : "8px");
+        }
+
+        function toggleHubs() {
+            showHubs = !showHubs;
+            updateHubStyles();
+        }
+
+        // Event handlers
+        function handleZoom(event) {
+            g.attr("transform", event.transform);
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function handleMouseOver(event, d) {
+            // Calculate incoming and outgoing connections
+            let incomingCount = 0;
+            let outgoingCount = 0;
+            const connectedNodes = new Set();
+
+            links.forEach(link => {
+                if (link.source.id === d.id) {
+                    outgoingCount++;
+                    connectedNodes.add(link.source.id);
+                    connectedNodes.add(link.target.id);
+                }
+                if (link.target.id === d.id) {
+                    incomingCount++;
+                    connectedNodes.add(link.source.id);
+                    connectedNodes.add(link.target.id);
+                }
+            });
+
+            tooltip
+                .style("opacity", 1)
+                .html(`
+                    <strong>${d.id}</strong><br/>
+                    ${d.name}<br/>
+                    <em>Catégorie: ${d.category}</em><br/>
+                    <small>Connexions entrantes: ${incomingCount}</small><br/>
+                    <small>Connexions sortantes: ${outgoingCount}</small>
+                `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+
+            // Fade out non-connected nodes and their labels
+            node.style("opacity", n => connectedNodes.has(n.id) ? 1 : 0.2)
+                .style("stroke-width", n => n.id === d.id ? 4 : 2)
+                .style("stroke", n => n.id === d.id ? "#ff6b6b" : "#fff");
+            
+            // Fade out non-connected node labels
+            labels.style("opacity", n => connectedNodes.has(n.id) ? 1 : 0.2)
+                  .style("font-weight", n => n.id === d.id ? "bold" : "normal")
+                  .style("font-size", n => n.id === d.id ? "10px" : "8px");
+            
+            // Highlight connected links
+            link.style("opacity", l =>
+                (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1
+            ).style("stroke-width", l =>
+                (l.source.id === d.id || l.target.id === d.id) ? "2px" : "1px"
+            ).style("stroke", l =>
+                (l.source.id === d.id || l.target.id === d.id) ? "#ff6b6b" : "#999"
+            ).style("marker-end", l =>
+                (l.source.id === d.id || l.target.id === d.id) ? "url(#arrowhead-highlight)" : "url(#arrowhead)"
+            );
+        }
+
+        function handleMouseOut() {
+            tooltip.style("opacity", 0);
+            
+            // Restore all nodes to normal state
+            node.style("opacity", 1)
+                .style("stroke-width", 2)
+                .style("stroke", "#fff");
+            
+            // Restore all labels to normal state
+            labels.style("opacity", 1)
+                  .style("font-weight", "normal")
+                  .style("font-size", "8px");
+            
+            // Restore all links to normal state
+            link.style("opacity", 0.6)
+                .style("stroke-width", "1px")
+                .style("stroke", "#999")
+                .style("marker-end", "url(#arrowhead)");
+
+            // Reapply hub styles if enabled
+            updateHubStyles();
+        }
+
+        // Search functionality
+        let currentSearchResults = [];
+        let selectedSearchIndex = -1;
+        let highlightedNodes = new Set();
+
+        function handleSearch() {
+            const searchInput = document.querySelector('.search-input');
+            const searchResults = document.getElementById('searchResults');
+            const clearButton = document.querySelector('.search-clear');
+            const query = searchInput.value.toLowerCase().trim();
+
+            if (query === '') {
+                searchResults.style.display = 'none';
+                clearButton.style.display = 'none';
+                clearHighlight();
+                return;
+            }
+
+            clearButton.style.display = 'block';
+
+            // Search in node IDs and names
+            currentSearchResults = nodes.filter(node => 
+                node.id.toLowerCase().includes(query) || 
+                node.name.toLowerCase().includes(query) ||
+                node.category.toLowerCase().includes(query)
+            );
+
+            if (currentSearchResults.length > 0) {
+                displaySearchResults(currentSearchResults);
+                searchResults.style.display = 'block';
+            } else {
+                searchResults.style.display = 'none';
+            }
+        }
+
+        function displaySearchResults(results) {
+            const searchResults = document.getElementById('searchResults');
+            searchResults.innerHTML = '';
+            
+            results.slice(0, 10).forEach((result, index) => {
+                const item = document.createElement('div');
+                item.className = 'search-result-item';
+                item.innerHTML = `<strong>${result.id}</strong><br><small>${result.name}</small>`;
+                item.onclick = () => selectSearchResult(result, index);
+                searchResults.appendChild(item);
+            });
+        }
+
+        function selectSearchResult(node, index) {
+            selectedSearchIndex = index;
+            highlightNode(node);
+            document.getElementById('searchResults').style.display = 'none';
+            
+            // Center view on selected node
+            const scale = d3.zoomTransform(svg.node()).k;
+            const translate = [
+                width / 2 - scale * node.x,
+                height / 2 - scale * node.y
+            ];
+            
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+        }
+
+        function highlightNode(targetNode) {
+            highlightedNodes.clear();
+            highlightedNodes.add(targetNode.id);
+
+            // Calculate incoming and outgoing connections for the target node
+            let incomingCount = 0;
+            let outgoingCount = 0;
+
+            // Find connected nodes
+            links.forEach(link => {
+                if (link.source.id === targetNode.id) {
+                    outgoingCount++;
+                    highlightedNodes.add(link.source.id);
+                    highlightedNodes.add(link.target.id);
+                }
+                if (link.target.id === targetNode.id) {
+                    incomingCount++;
+                    highlightedNodes.add(link.source.id);
+                    highlightedNodes.add(link.target.id);
+                }
+            });
+
+            // Apply highlighting
+            node.style("opacity", n => highlightedNodes.has(n.id) ? 1 : 0.2)
+                .style("stroke-width", n => n.id === targetNode.id ? 4 : 2)
+                .style("stroke", n => n.id === targetNode.id ? "#ff6b6b" : "#fff");
+
+            link.style("opacity", l =>
+                (l.source.id === targetNode.id || l.target.id === targetNode.id) ? 1 : 0.1
+            ).style("marker-end", l =>
+                (l.source.id === targetNode.id || l.target.id === targetNode.id) ? "url(#arrowhead-highlight)" : "url(#arrowhead)"
+            );
+
+            labels.style("opacity", n => highlightedNodes.has(n.id) ? 1 : 0.3)
+                  .style("font-weight", n => n.id === targetNode.id ? "bold" : "normal");
+        }
+
+        // Highlight a whole chain like "A-B-C" (only adjacent pairs)
+        function highlightChain(chainStr) {
+            const parts = chainStr.split('-').map(t => t.trim()).filter(Boolean);
+            const nodeSet = new Set(parts);
+            const pairSet = new Set();
+            for (let i = 0; i < parts.length - 1; i++) pairSet.add(`${parts[i]}->${parts[i+1]}`);
+
+            node.style("opacity", n => nodeSet.has(n.id) ? 1 : 0.1)
+                .style("stroke-width", n => nodeSet.has(n.id) ? 3 : 2)
+                .style("stroke", n => nodeSet.has(n.id) ? "#ff6b6b" : "#fff");
+
+            labels.style("opacity", n => nodeSet.has(n.id) ? 1 : 0.2)
+                  .style("font-weight", n => nodeSet.has(n.id) ? "bold" : "normal");
+
+            link.style("opacity", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? 1 : 0.05;
+                })
+                .style("stroke-width", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "2px" : "1px";
+                })
+                .style("stroke", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "#ff6b6b" : "#999";
+                })
+                .style("marker-end", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "url(#arrowhead-highlight)" : "url(#arrowhead)";
+                });
+        }
+
+        function clearHighlight() {
+            highlightedNodes.clear();
+            node.style("opacity", 1)
+                .style("stroke-width", 2)
+                .style("stroke", "#fff");
+            link.style("opacity", 0.6)
+                .style("marker-end", "url(#arrowhead)");
+            labels.style("opacity", 1)
+                  .style("font-weight", "normal")
+                  .style("font-size", "8px");
+
+            // Reapply hub styles if enabled
+            updateHubStyles();
+        }
+
+        function clearSearch() {
+            document.querySelector('.search-input').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            document.querySelector('.search-clear').style.display = 'none';
+            clearHighlight();
+            currentSearchResults = [];
+            selectedSearchIndex = -1;
+        }
+
+        function handleSearchKeydown(event) {
+            const searchResults = document.getElementById('searchResults');
+            
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (currentSearchResults.length > 0) {
+                    selectedSearchIndex = Math.min(selectedSearchIndex + 1, currentSearchResults.length - 1);
+                    updateSelectedSearchItem();
+                }
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (currentSearchResults.length > 0) {
+                    selectedSearchIndex = Math.max(selectedSearchIndex - 1, 0);
+                    updateSelectedSearchItem();
+                }
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (selectedSearchIndex >= 0 && selectedSearchIndex < currentSearchResults.length) {
+                    selectSearchResult(currentSearchResults[selectedSearchIndex], selectedSearchIndex);
+                }
+            } else if (event.key === 'Escape') {
+                searchResults.style.display = 'none';
+            }
+        }
+
+        function updateSelectedSearchItem() {
+            const items = document.querySelectorAll('.search-result-item');
+            items.forEach((item, index) => {
+                if (index === selectedSearchIndex) {
+                    item.style.background = '#e3f2fd';
+                } else {
+                    item.style.background = '';
+                }
+            });
+        }
+
+        // Hide search results when clicking outside
+        document.addEventListener('click', function(event) {
+            const searchContainer = document.querySelector('.search-container');
+            if (searchContainer && !searchContainer.contains(event.target)) {
+                const resultsEl = document.getElementById('searchResults');
+                if (resultsEl) resultsEl.style.display = 'none';
+            }
+        });
+
+        // Control functions
+        function restartSimulation() {
+            simulation.alpha(1).restart();
+        }
+
+        function centerGraph() {
+            const bounds = g.node().getBBox();
+            const parent = g.node().parentElement;
+            const fullWidth = parent.clientWidth || parent.parentNode.clientWidth;
+            const fullHeight = parent.clientHeight || parent.parentNode.clientHeight;
+            const width = bounds.width;
+            const height = bounds.height;
+            const midX = bounds.x + width / 2;
+            const midY = bounds.y + height / 2;
+            if (width == 0 || height == 0) return;
+            const scale = 0.8 / Math.max(width / fullWidth, height / fullHeight);
+            const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
+            
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+        }
+
+        function toggleLabels() {
+            showLabels = !showLabels;
+            labels.style("display", showLabels ? "block" : "none");
+        }
+
+        // Initial centering after a short delay
+        setTimeout(() => { centerGraph(); renderRelationsList(); updateHubStyles(); }, 500);
+    </script>
+</body>
+</html>
