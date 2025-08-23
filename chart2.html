@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagramme de Sankey des Relations Sentiment-Dimension-Étape</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            width: 100vw;
+            height: 100vh;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            height: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #333;
+        }
+        .legend {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+            flex-shrink: 0;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .legend p {
+            margin: 4px 0;
+        }
+        .legend strong {
+            color: #333;
+        }
+        .svg-container {
+            width: 100%;
+            flex: 1;
+            overflow: auto;
+            min-height: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .node-text {
+            font-size: 10px;
+            fill: #333;
+        }
+        .connection-path {
+            opacity: 0.6;
+            transition: opacity 0.3s, stroke-width 0.3s;
+            cursor: pointer;
+        }
+        .connection-path:hover {
+            opacity: 0.9;
+        }
+        .connection-path.highlighted {
+            opacity: 1;
+            stroke-width: 3px !important;
+        }
+        .connection-path.dimmed {
+            opacity: 0.15;
+        }
+        .connection-path.one-to-one {
+            stroke-dasharray: 5,5;
+        }
+        .connection-path.one-to-many {
+            stroke-dasharray: none;
+        }
+        .connection-path.dimension-to-stage {
+            stroke-dasharray: none;
+        }
+        .node-rect {
+            transition: stroke-width 0.3s, stroke 0.3s, opacity 0.3s;
+            cursor: pointer;
+        }
+        .node-rect:hover {
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .node-rect.highlighted {
+            stroke: #333;
+            stroke-width: 3px;
+        }
+        .node-rect.dimmed {
+            opacity: 0.3;
+        }
+        .node-text {
+            transition: opacity 0.3s;
+        }
+        .node-text.dimmed {
+            opacity: 0.3;
+        }
+        .link-label {
+            font-size: 10px;
+            fill: #111;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .link-label.dimmed {
+            opacity: 0.3;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        .legend-item {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 8px;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .filter-container {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            flex-shrink: 0;
+        }
+        .filter-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .filter-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .filter-checkbox:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filter-checkbox input {
+            margin-right: 6px;
+        }
+        .filter-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover {
+            background: #f0f0f0;
+        }
+        .filter-btn.primary {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .filter-btn.primary:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        const SankeyChart = () => {
+            const [hoveredNode, setHoveredNode] = useState(null);
+            const [hoveredLink, setHoveredLink] = useState(null);
+            const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
+            const [selectedDimensions, setSelectedDimensions] = useState(new Set());
+            const [connectionTypeFilter, setConnectionTypeFilter] = useState('all'); // 'all', 'one-to-many', 'one-to-one'
+            const data = useMemo(() => {
+                // Utilisation directe des termes français
+
+                // Données de connexion plusieurs-vers-un
+                const oneToManyData = [
+                    ["Rupture de culture", "S3", "2"],
+                    ["Rupture de culture", "I2", "2"],
+                    ["Rupture de culture", "I4c", "2"],
+                    ["Rupture de culture", "I6a", "2"],
+                    ["Rupture de culture", "I6b", "2"],
+                    ["Rupture de culture", "So1b", "2"],
+                    ["Rupture de culture", "So3a", "2"],
+                    ["Rupture de culture", "So4d", "2"],
+                    ["Rupture de culture", "So5", "2"],
+                    ["Étonné choc choqué frappant", "Pe3b", "3"],
+                    ["Étonné choc choqué frappant", "I2", "2"],
+                    ["Étonné choc choqué frappant", "I2", "4"],
+                    ["Étonné choc choqué frappant", "I3", "2"],
+                    ["Étonné choc choqué frappant", "I3", "4"],
+                    ["Étonné choc choqué frappant", "I4a", "2"],
+                    ["Étonné choc choqué frappant", "I4b", "3"],
+                    ["Étonné choc choqué frappant", "I4b", "4"],
+                    ["Étonné choc choqué frappant", "I6b", "2"],
+                    ["Étonné choc choqué frappant", "I6b", "4"],
+                    ["Étonné choc choqué frappant", "So5", "2"],
+                    ["Étonné choc choqué frappant", "So5", "4"],
+                    ["Intéressant", "Pe3a", "4"],
+                    ["Intéressant", "I2", "4"],
+                    ["Intéressant", "I4a", "4"],
+                    ["Intéressant", "I4b", "4"],
+                    ["Intéressant", "I6a", "4"],
+                    ["Intéressant", "I6b", "4"],
+                    ["Intéressant", "So3a", "4"],
+                    ["Beau", "Pe3b", "3"],
+                    ["Beau", "I2", "3"],
+                    ["Beau", "I4a", "3"],
+                    ["Beau", "I6b", "3"],
+                    ["Beau", "I6b", "4"],
+                    ["Beau", "So4c", "3"],
+                    ["Beau", "So4c", "4"],
+                    ["Nouveauté original fresh rafraîchissant", "P1", "4"],
+                    ["Nouveauté original fresh rafraîchissant", "I4a", "4"],
+                    ["Nouveauté original fresh rafraîchissant", "I5", "4"],
+                    ["Nouveauté original fresh rafraîchissant", "I6b", "4"],
+                    ["Nouveauté original fresh rafraîchissant", "So3c", "4"],
+                    ["Positif bon", "Pe3a", "4"],
+                    ["Positif bon", "Pe3b", "4"],
+                    ["Positif bon", "I3", "4"],
+                    ["Positif bon", "I4a", "4"],
+                    ["Plaisir", "Pe1", "4"],
+                    ["Plaisir", "Pe3a", "4"],
+                    ["Plaisir", "Pe4c", "4"],
+                    ["Curiosité", "Pe2b", "1"],
+                    ["Curiosité", "Pe2b", "4"],
+                    ["Curiosité", "Pe4d", "1"],
+                    ["Curiosité", "Pe4d", "4"],
+                    ["Curiosité", "I4a", "1"],
+                    ["Curiosité", "I4a", "4"],
+                    ["Intense intensité énergie fort épuisant", "Pe2a", "4"],
+                    ["Intense intensité énergie fort épuisant", "Pe3b", "4"],
+                    ["Intense intensité énergie fort épuisant", "So3c", "4"],
+                    ["Magique", "Pe3b", "3"],
+                    ["Magique", "I2", "3"],
+                    ["Magique", "I4a", "3"],
+                    ["Dégoûtant désagréable dérangeant timide", "Pe3a", "2"],
+                    ["Dégoûtant désagréable dérangeant timide", "Pe4e", "2"],
+                    ["Dégoûtant désagréable dérangeant timide", "I4a", "2"],
+                    ["Satisfaisant", "P1", "4"],
+                    ["Satisfaisant", "Pe2a", "4"],
+                    ["Engageant", "S3", "4"],
+                    ["Engageant", "Pe4b", "4"],
+                    ["Sentiment appartenance", "S3", "4"],
+                    ["Sentiment appartenance", "Pe4b", "4"],
+                    ["Sentir le soin", "S3", "4"],
+                    ["Sentir le soin", "Pe1", "4"],
+                    ["Confortable rassurant", "Pe1", "4"],
+                    ["Confortable rassurant", "Pe4e", "4"],
+                    ["Marrant", "Pe3a", "4"],
+                    ["Marrant", "So3a", "4"],
+                    ["Sentir l'héritage hommage dépôt", "I2", "4"],
+                    ["Sentir l'héritage hommage dépôt", "I6b", "2"],
+                    ["Extraordinaire incroyable", "Pe1", "3"],
+                    ["Extraordinaire incroyable", "Pe1", "4"],
+                    ["Extraordinaire incroyable", "Pe3b", "3"],
+                    ["Peur stressant", "Pe3a", "2"],
+                    ["Sentir particulier différent", "Pe3a", "2"],
+                    ["Sentir particulier différent", "So5", "2"],
+                    ["Amusé", "Pe4c", "1"],
+                    ["Amusé", "Pe3b", "3"]
+                ];
+
+                // Données de connexion un-vers-un
+                const oneToOneData = [
+                    ["Quotidien", "S1", "4"],
+                    ["Exclu", "S3", "2"],
+                    ["Sentir à l'aise", "S3", "4"],
+                    ["Amusant", "Pe1", "4"],
+                    ["Reposant", "Pe1", "4"],
+                    ["Ne sentir pas la fatigue", "Pe1", "4"],
+                    ["Utilité", "Pe2a", "4"],
+                    ["Content", "Pe2a", "4"],
+                    ["Ennuyé", "Pe3a", "2"],
+                    ["Vide", "Pe3a", "2"],
+                    ["Comique", "Pe3a", "4"],
+                    ["Bonheur", "Pe3a", "4"],
+                    ["Passionnant", "Pe3b", "3"],
+                    ["Avoir vécu qqch", "Pe3b", "3"],
+                    ["Enthousiaste", "Pe4c", "1"],
+                    ["Immersive", "I1", "4"],
+                    ["Absurde", "I1", "4"],
+                    ["Fun", "I4a", "1"],
+                    ["Fun", "I4a", "4"],
+                    ["Bizarre", "I4a", "2"],
+                    ["Drôle", "I4a", "4"],
+                    ["Surpris", "I4a", "2"],
+                    ["Inquiet déroutant incapable de comprendre anxieux", "I4c", "2"],
+                    ["Abstrait", "I4c", "2"],
+                    ["Défensif", "I4c", "2"],
+                    ["sentir la progression", "I4d", "4"],
+                    ["Simple", "I6a", "4"],
+                    ["Insécurité linguistique", "So1b", "2"],
+                    ["Rigolo", "So3a", "2"],
+                    ["Rigolo", "So3a", "3"],
+                    ["Rigolo", "So3a", "4"],
+                    ["Regret", "So3a", "4"],
+                    ["Sympa", "So3c", "4"]
+                ];
+
+                // Fusion des données
+                const rawData = [...oneToManyData, ...oneToOneData];
+
+                // Classification des dimensions et mapping des couleurs
+                const dimensionCategories = {
+                    'P1': { category: 'Processuelle', color: '#8884d8', name: 'Accumulation connaissance' },
+                    'P2': { category: 'Processuelle', color: '#8884d8', name: 'Effets dans l\'avenir ou transversaux' },
+                    'E1': { category: 'Économique', color: '#82ca9d', name: 'Réseau professionnel' },
+                    'E2': { category: 'Économique', color: '#82ca9d', name: 'Promouvoir culture' },
+                    'E3': { category: 'Économique', color: '#82ca9d', name: 'Opportunités culturelles' },
+                    'S1': { category: 'Sociétale', color: '#ffc658', name: 'Accessibilité et quotidien' },
+                    'S2a': { category: 'Sociétale', color: '#ffc658', name: 'Diversité des formes artistiques et culturelles proposées' },
+                    'S2b': { category: 'Sociétale', color: '#ffc658', name: 'Diversité dans la culture française' },
+                    'S3': { category: 'Sociétale', color: '#ffc658', name: 'Inclusion et intégration' },
+                    'Pe1': { category: 'Personnelle', color: '#ff7c7c', name: 'Bien-être' },
+                    'Pe2a': { category: 'Personnelle', color: '#ff7c7c', name: 'Sens personnel' },
+                    'Pe2b': { category: 'Personnelle', color: '#ff7c7c', name: 'Intérêt, curiosité ou un goût envers l\'art' },
+                    'Pe2c': { category: 'Personnelle', color: '#ff7c7c', name: 'Envie de poursuivre' },
+                    'Pe3a': { category: 'Personnelle', color: '#ff7c7c', name: 'Ressentis ou émotions' },
+                    'Pe3b': { category: 'Personnelle', color: '#ff7c7c', name: 'Ressentis ou émotions intenses' },
+                    'Pe4a': { category: 'Personnelle', color: '#ff7c7c', name: 'Autonomie' },
+                    'Pe4b': { category: 'Personnelle', color: '#ff7c7c', name: 'Engagement de l\'individu' },
+                    'Pe4c': { category: 'Personnelle', color: '#ff7c7c', name: 'Suivre l\'intérêt personnel' },
+                    'Pe4d': { category: 'Personnelle', color: '#ff7c7c', name: 'Personnalité (curiosité; ouverture)' },
+                    'Pe4e': { category: 'Personnelle', color: '#ff7c7c', name: 'Toi-même' },
+                    'Pe4f': { category: 'Personnelle', color: '#ff7c7c', name: 'Liberté, improvisation' },
+                    'I1': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Attention' },
+                    'I2': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Imagination' },
+                    'I3': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Réflexion' },
+                    'I4a': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Ouverture d\'esprit' },
+                    'I4b': { category: 'Intellectuelle', color: '#8dd1e1', name: '(Sa propre) compréhension envers l\'art et la culture' },
+                    'I4c': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Exemples contre la compréhension' },
+                    'I4d': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Conscience de sa limite de connaissance et sa limite physique' },
+                    'I5': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Mise en liens des choses différentes' },
+                    'I6a': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Connaissance ou technique spécifique en arts' },
+                    'I6b': { category: 'Intellectuelle', color: '#8dd1e1', name: 'Connaissance artistique et culturelle générale' },
+                    'So1a': { category: 'Sociale', color: '#d084d0', name: 'Médiation' },
+                    'So1b': { category: 'Sociale', color: '#d084d0', name: 'Langue' },
+                    'So2a': { category: 'Sociale', color: '#d084d0', name: 'Confiance en soi' },
+                    'So2b': { category: 'Sociale', color: '#d084d0', name: 'Anticipation' },
+                    'So2c': { category: 'Sociale', color: '#d084d0', name: 'Empathie' },
+                    'So2d': { category: 'Sociale', color: '#d084d0', name: 'Courage' },
+                    'So2e': { category: 'Sociale', color: '#d084d0', name: 'Patience' },
+                    'So2f': { category: 'Sociale', color: '#d084d0', name: 'Responsabilité' },
+                    'So3a': { category: 'Sociale', color: '#d084d0', name: 'Connexion' },
+                    'So3b': { category: 'Sociale', color: '#d084d0', name: 'Rencontrer des gens intérêt commun' },
+                    'So3c': { category: 'Sociale', color: '#d084d0', name: 'Engagement collectif' },
+                    'So4a': { category: 'Sociale', color: '#d084d0', name: 'Habitudes académiques et professionnelles' },
+                    'So4b': { category: 'Sociale', color: '#d084d0', name: 'habitudes de l\'artiste' },
+                    'So4c': { category: 'Sociale', color: '#d084d0', name: 'Habitudes de pratique artistique dans l\'avenir' },
+                    'So4d': { category: 'Sociale', color: '#d084d0', name: 'Habitudes dans la vie quotidienne' },
+                    'So5': { category: 'Sociale', color: '#d084d0', name: 'Interculturel' }
+                };
+
+                // Traitement séparé des deux types de données
+                const processData = (dataArray, connectionType) => {
+                    const connections = {};
+                    const connectionTypes = {};
+                    const dimStagePrimaryLabel = {};
+                    const dimStageSentiments = {};
+
+                    dataArray.forEach(([sentiment, dimension, etape]) => {
+                        const sentToDim = `${sentiment}|${dimension}`;
+                        const dimToEtape = `${dimension}|Étape ${etape}`;
+
+                        connections[sentToDim] = (connections[sentToDim] || 0) + 1;
+                        connections[dimToEtape] = (connections[dimToEtape] || 0) + 1;
+
+                        connectionTypes[sentToDim] = connectionType;
+                        connectionTypes[dimToEtape] = 'dimension-to-stage'; // Marquage uniforme dimension vers étape
+
+                        // Choose a primary label: first seen, but one-to-one overrides later in merge
+                        if (!dimStagePrimaryLabel[dimToEtape]) {
+                            dimStagePrimaryLabel[dimToEtape] = sentiment;
+                        }
+
+                        // Collect unique sentiment names for each dimension → étape link
+                        if (!dimStageSentiments[dimToEtape]) dimStageSentiments[dimToEtape] = [];
+                        if (!dimStageSentiments[dimToEtape].includes(sentiment)) {
+                            dimStageSentiments[dimToEtape].push(sentiment);
+                        }
+                    });
+
+                    return { connections, connectionTypes, dimStagePrimaryLabel, dimStageSentiments };
+                };
+
+                // Traitement des données plusieurs-vers-un
+                const oneToManyResult = processData(oneToManyData, 'one-to-many');
+                // Traitement des données un-vers-un
+                const oneToOneResult = processData(oneToOneData, 'one-to-one');
+
+                // Fusion des données de connexion
+                const connections = { ...oneToManyResult.connections };
+                const connectionTypes = { ...oneToManyResult.connectionTypes };
+                const dimStageToPrimaryLabel = {};
+                const dimStageToSentiments = {};
+
+                // Fusion des données un-vers-un
+                Object.entries(oneToOneResult.connections).forEach(([key, value]) => {
+                    connections[key] = (connections[key] || 0) + value;
+                });
+                Object.entries(oneToOneResult.connectionTypes).forEach(([key, type]) => {
+                    if (key.includes('Étape')) {
+                        connectionTypes[key] = 'dimension-to-stage';
+                    } else {
+                        connectionTypes[key] = type;
+                    }
+                });
+
+                // Merge primary labels; prefer one-to-one values when present
+                Object.entries(oneToManyResult.dimStagePrimaryLabel).forEach(([k, v]) => {
+                    if (!dimStageToPrimaryLabel[k]) dimStageToPrimaryLabel[k] = v;
+                });
+                Object.entries(oneToOneResult.dimStagePrimaryLabel).forEach(([k, v]) => {
+                    // override with one-to-one preference
+                    dimStageToPrimaryLabel[k] = v;
+                });
+
+                // Merge sentiment lists for dimension → étape links (unique, keep insertion order)
+                const mergeSentiments = (src) => {
+                    Object.entries(src).forEach(([k, arr]) => {
+                        if (!dimStageToSentiments[k]) dimStageToSentiments[k] = [];
+                        arr.forEach(s => {
+                            if (!dimStageToSentiments[k].includes(s)) dimStageToSentiments[k].push(s);
+                        });
+                    });
+                };
+                mergeSentiments(oneToManyResult.dimStageSentiments);
+                mergeSentiments(oneToOneResult.dimStageSentiments);
+
+                // Création des nœuds
+                const sentiments = [...new Set(rawData.map(d => d[0]))];
+                const dimensions = [...new Set(rawData.map(d => d[1]))];
+                const etapes = [...new Set(rawData.map(d => `Étape ${d[2]}`))];
+
+                const nodes = [
+                    ...sentiments.map(name => ({
+                        name,
+                        category: 'sentiment'
+                    })),
+                    ...dimensions.map(name => ({
+                        name,
+                        category: 'dimension',
+                        color: dimensionCategories[name]?.color || '#999999'
+                    })),
+                    ...etapes.map(name => ({ name, category: 'etape' }))
+                ];
+
+                // Création des connexions
+                const links = [];
+
+                // Création des connexions sentiment vers dimension
+                Object.entries(connections).forEach(([key, value]) => {
+                    if (key.includes('|') && !key.includes('Étape')) {
+                        const [source, target] = key.split('|');
+                        if (sentiments.includes(source) && dimensions.includes(target)) {
+                            links.push({
+                                source: nodes.findIndex(n => n.name === source),
+                                target: nodes.findIndex(n => n.name === target),
+                                value: value,
+                                connectionType: connectionTypes[key]
+                            });
+                        }
+                    }
+                });
+
+                // Création des connexions dimension vers étape
+                Object.entries(connections).forEach(([key, value]) => {
+                    if (key.includes('Étape')) {
+                        const [source, target] = key.split('|');
+                        if (dimensions.includes(source) && etapes.includes(target)) {
+                            links.push({
+                                source: nodes.findIndex(n => n.name === source),
+                                target: nodes.findIndex(n => n.name === target),
+                                value: value,
+                                connectionType: 'dimension-to-stage',
+                                label: (dimStageToSentiments[key] || []).join(', ')
+                            });
+                        }
+                    }
+                });
+
+                return { nodes, links, dimensionCategories, connectionTypes, oneToManyData, oneToOneData };
+            }, []);
+
+            // Filtrage des données basé sur les dimensions sélectionnées et le type de connexion
+            const filteredData = useMemo(() => {
+                const { dimensionCategories, oneToManyData, oneToOneData } = data;
+
+                // Obtenir toutes les dimensions des catégories sélectionnées
+                const selectedDimensionNames = new Set();
+                if (selectedDimensions.size > 0) {
+                    Object.entries(dimensionCategories).forEach(([dimName, dimInfo]) => {
+                        if (selectedDimensions.has(dimInfo.category)) {
+                            selectedDimensionNames.add(dimName);
+                        }
+                    });
+                } else {
+                    // Si aucune catégorie de dimension n'est sélectionnée, inclure toutes les dimensions
+                    Object.keys(dimensionCategories).forEach(dimName => {
+                        selectedDimensionNames.add(dimName);
+                    });
+                }
+
+                // Sélection de la source de données selon le type de connexion
+                let activeDataSources = [];
+                if (connectionTypeFilter === 'all') {
+                    activeDataSources = [
+                        ...oneToManyData.map(d => [...d, 'one-to-many']),
+                        ...oneToOneData.map(d => [...d, 'one-to-one'])
+                    ];
+                } else if (connectionTypeFilter === 'one-to-many') {
+                    activeDataSources = oneToManyData.map(d => [...d, 'one-to-many']);
+                } else if (connectionTypeFilter === 'one-to-one') {
+                    activeDataSources = oneToOneData.map(d => [...d, 'one-to-one']);
+                }
+
+                // Filtrage des données selon les catégories de dimensions
+                activeDataSources = activeDataSources.filter(([sentiment, dimension, etape, type]) => {
+                    return selectedDimensionNames.has(dimension);
+                });
+
+                // Recalcul du nombre de connexions
+                const connections = {};
+                const connectionTypes = {};
+                const dimStagePrimaryLabel = {};
+                const dimStageSentiments = {};
+
+                activeDataSources.forEach(([sentiment, dimension, etape, type]) => {
+                    const sentToDim = `${sentiment}|${dimension}`;
+                    const dimToEtape = `${dimension}|Étape ${etape}`;
+
+                    connections[sentToDim] = (connections[sentToDim] || 0) + 1;
+                    connections[dimToEtape] = (connections[dimToEtape] || 0) + 1;
+
+                    connectionTypes[sentToDim] = type;
+                    connectionTypes[dimToEtape] = 'dimension-to-stage';
+
+                    // set primary label; one-to-one overrides any previous
+                    if (!dimStagePrimaryLabel[dimToEtape]) {
+                        dimStagePrimaryLabel[dimToEtape] = sentiment;
+                    }
+                    if (type === 'one-to-one') {
+                        dimStagePrimaryLabel[dimToEtape] = sentiment;
+                    }
+
+                    // collect unique sentiment names for each dimension → étape link
+                    if (!dimStageSentiments[dimToEtape]) dimStageSentiments[dimToEtape] = [];
+                    if (!dimStageSentiments[dimToEtape].includes(sentiment)) {
+                        dimStageSentiments[dimToEtape].push(sentiment);
+                    }
+                });
+
+                // Création des nœuds
+                const sentiments = [...new Set(activeDataSources.map(d => d[0]))];
+                const dimensions = [...new Set(activeDataSources.map(d => d[1]))];
+                const etapes = [...new Set(activeDataSources.map(d => `Étape ${d[2]}`))];
+
+                const nodes = [
+                    ...sentiments.map(name => ({
+                        name,
+                        category: 'sentiment'
+                    })),
+                    ...dimensions.map(name => ({
+                        name,
+                        category: 'dimension',
+                        color: dimensionCategories[name]?.color || '#999999'
+                    })),
+                    ...etapes.map(name => ({ name, category: 'etape' }))
+                ];
+
+                // Création des connexions
+                const links = [];
+
+                // Création des connexions sentiment vers dimension
+                Object.entries(connections).forEach(([key, value]) => {
+                    if (key.includes('|') && !key.includes('Étape')) {
+                        const [source, target] = key.split('|');
+                        if (sentiments.includes(source) && dimensions.includes(target)) {
+                            links.push({
+                                source: nodes.findIndex(n => n.name === source),
+                                target: nodes.findIndex(n => n.name === target),
+                                value: value,
+                                connectionType: connectionTypes[key]
+                            });
+                        }
+                    }
+                });
+
+                // Création des connexions dimension vers étape
+                Object.entries(connections).forEach(([key, value]) => {
+                    if (key.includes('Étape')) {
+                        const [source, target] = key.split('|');
+                        if (dimensions.includes(source) && etapes.includes(target)) {
+                            links.push({
+                                source: nodes.findIndex(n => n.name === source),
+                                target: nodes.findIndex(n => n.name === target),
+                                value: value,
+                                connectionType: 'dimension-to-stage',
+                                label: (dimStageSentiments[key] || []).join(', ')
+                            });
+                        }
+                    }
+                });
+
+                return {
+                    nodes,
+                    links,
+                    dimensionCategories,
+                    connectionTypes
+                };
+            }, [data, selectedDimensions, connectionTypeFilter]);
+
+            // Options des catégories de dimensions
+            const dimensionCategoryOptions = useMemo(() => {
+                const categories = new Set();
+                Object.values(data.dimensionCategories).forEach(dim => {
+                    categories.add(dim.category);
+                });
+                return Array.from(categories).sort();
+            }, [data]);
+
+            // Gestion du filtrage des dimensions
+            const handleDimensionToggle = (category) => {
+                const newSelected = new Set(selectedDimensions);
+                if (newSelected.has(category)) {
+                    newSelected.delete(category);
+                } else {
+                    newSelected.add(category);
+                }
+                setSelectedDimensions(newSelected);
+            };
+
+            const handleSelectAll = () => {
+                setSelectedDimensions(new Set(dimensionCategoryOptions));
+            };
+
+            const handleClearAll = () => {
+                setSelectedDimensions(new Set());
+            };
+
+            // Gestion du filtrage des types de connexion
+            const handleConnectionTypeChange = (type) => {
+                setConnectionTypeFilter(type);
+            };
+
+            return (
+                <div className="container">
+                    <div className="chart-container">
+                        <div className="filter-container">
+                            <div style={{display: 'flex', gap: '20px', alignItems: 'flex-start'}}>
+                                <div style={{flex: '0 0 auto'}}>
+                                    <div className="filter-title">Type de connexion</div>
+                                    <div className="filter-options">
+                                        <label
+                                            className={`filter-checkbox ${connectionTypeFilter === 'all' ? 'active' : ''}`}
+                                            onClick={() => handleConnectionTypeChange('all')}
+                                            style={{
+                                                backgroundColor: connectionTypeFilter === 'all' ? '#007bff' : 'white',
+                                                color: connectionTypeFilter === 'all' ? 'white' : '#333',
+                                                borderColor: connectionTypeFilter === 'all' ? '#007bff' : '#ddd'
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="connectionType"
+                                                checked={connectionTypeFilter === 'all'}
+                                                onChange={() => handleConnectionTypeChange('all')}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{display: 'none'}}
+                                            />
+                                            Tous
+                                        </label>
+                                        <label
+                                            className={`filter-checkbox ${connectionTypeFilter === 'one-to-many' ? 'active' : ''}`}
+                                            onClick={() => handleConnectionTypeChange('one-to-many')}
+                                            style={{
+                                                backgroundColor: connectionTypeFilter === 'one-to-many' ? '#007bff' : 'white',
+                                                color: connectionTypeFilter === 'one-to-many' ? 'white' : '#333',
+                                                borderColor: connectionTypeFilter === 'one-to-many' ? '#007bff' : '#ddd'
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="connectionType"
+                                                checked={connectionTypeFilter === 'one-to-many'}
+                                                onChange={() => handleConnectionTypeChange('one-to-many')}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{display: 'none'}}
+                                            />
+                                            Plusieurs-vers-un
+                                        </label>
+                                        <label
+                                            className={`filter-checkbox ${connectionTypeFilter === 'one-to-one' ? 'active' : ''}`}
+                                            onClick={() => handleConnectionTypeChange('one-to-one')}
+                                            style={{
+                                                backgroundColor: connectionTypeFilter === 'one-to-one' ? '#007bff' : 'white',
+                                                color: connectionTypeFilter === 'one-to-one' ? 'white' : '#333',
+                                                borderColor: connectionTypeFilter === 'one-to-one' ? '#007bff' : '#ddd'
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="connectionType"
+                                                checked={connectionTypeFilter === 'one-to-one'}
+                                                onChange={() => handleConnectionTypeChange('one-to-one')}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{display: 'none'}}
+                                            />
+                                            Un-vers-un
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div style={{flex: '1'}}>
+                                    <div className="filter-title">Filtre de dimension</div>
+                                    <div className="filter-options">
+                                        {dimensionCategoryOptions.map(category => {
+                                            const colorMap = {
+                                                'Processuelle': '#8884d8',
+                                                'Économique': '#82ca9d',
+                                                'Sociétale': '#ffc658',
+                                                'Personnelle': '#ff7c7c',
+                                                'Intellectuelle': '#8dd1e1',
+                                                'Sociale': '#d084d0'
+                                            };
+                                            const color = colorMap[category] || '#999999';
+
+                                            return (
+                                                <label
+                                                    key={category}
+                                                    className={`filter-checkbox ${selectedDimensions.has(category) ? 'active' : ''}`}
+                                                    style={{
+                                                        borderColor: selectedDimensions.has(category) ? color : '#ddd',
+                                                        backgroundColor: selectedDimensions.has(category) ? color : 'white',
+                                                        color: selectedDimensions.has(category) ? 'white' : '#333'
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedDimensions.has(category)}
+                                                        onChange={() => handleDimensionToggle(category)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{display: 'none'}}
+                                                    />
+                                                    <span className="legend-color" style={{backgroundColor: color, marginRight: '6px'}}></span>
+                                                    {category}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="filter-actions">
+                                        <button className="filter-btn primary" onClick={handleSelectAll}>
+                                            Tout sélectionner
+                                        </button>
+                                        <button className="filter-btn" onClick={handleClearAll}>
+                                            Tout effacer
+                                        </button>
+                                        <span style={{fontSize: '12px', color: '#666', marginLeft: '10px'}}>
+                                            {selectedDimensions.size === 0 ? 'Afficher toutes les dimensions' : `${selectedDimensions.size} catégories de dimensions sélectionnées`}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <CustomSankey
+                            data={filteredData}
+                            hoveredNode={hoveredNode}
+                            setHoveredNode={setHoveredNode}
+                            hoveredLink={hoveredLink}
+                            setHoveredLink={setHoveredLink}
+                            tooltip={tooltip}
+                            setTooltip={setTooltip}
+                        />
+                        <div className="legend">
+                            <p><strong>Explication :</strong></p>
+                            <p>• Gauche : Types de sentiment | Centre : Classification des dimensions | Droite : Étapes</p>
+                            <p>• L'épaisseur des lignes représente l'intensité de la connexion, la couleur hérite de la classification des dimensions</p>
+                            <p>• Sentiment vers dimension : ligne continue pour connexion plusieurs-vers-un, ligne pointillée pour connexion un-vers-un | Dimension vers étape : toutes lignes continues</p>
+                            <div style={{marginTop: '8px', fontSize: '12px', color: '#666'}}>
+                                <strong>Filtrage actuel :</strong>
+                                Type de connexion: {connectionTypeFilter === 'all' ? 'Tous' : connectionTypeFilter === 'one-to-many' ? 'Plusieurs-vers-un' : 'Un-vers-un'}
+                                {selectedDimensions.size > 0 && (
+                                    <> | Catégories de dimensions: {Array.from(selectedDimensions).join(', ')}</>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    {tooltip.visible && (
+                        <div
+                            className="tooltip"
+                            style={{
+                                left: tooltip.x + 'px',
+                                top: tooltip.y + 'px'
+                            }}
+                        >
+                            {tooltip.content.split('\n').map((line, index) => (
+                                <div key={index}>{line}</div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const CustomSankey = ({ data, hoveredNode, setHoveredNode, hoveredLink, setHoveredLink, tooltip, setTooltip }) => {
+            const { nodes, links } = data;
+
+            // Calcul dynamique de l'espace disponible
+            const containerRef = React.useRef();
+            const [dimensions, setDimensions] = React.useState({ width: 1400, height: 800 });
+
+            React.useEffect(() => {
+                const updateDimensions = () => {
+                    if (containerRef.current) {
+                        const rect = containerRef.current.getBoundingClientRect();
+                        setDimensions({
+                            width: Math.max(1200, rect.width - 20), // 减少最小宽度，让图表更好适应
+                            height: Math.max(600, rect.height - 10)  // 减少最小高度，让图表更好适应
+                        });
+                    }
+                };
+
+                updateDimensions();
+                window.addEventListener('resize', updateDimensions);
+                return () => window.removeEventListener('resize', updateDimensions);
+            }, []);
+
+            const { width, height } = dimensions;
+            const nodeWidth = 30;
+            const nodePadding = 8;
+
+            // 动态估算文本所需的最大宽度，避免长文本被裁剪
+            const maxSentimentTextWidth = Math.min(
+                480,
+                Math.max(
+                    200,
+                    Math.max(
+                        ...nodes.filter(n => n.category === 'sentiment').map(n => n.name.length)
+                    ) * 6
+                )
+            );
+            const maxEtapeTextWidth = Math.min(
+                240,
+                Math.max(
+                    100,
+                    Math.max(
+                        ...nodes.filter(n => n.category === 'etape').map(n => n.name.length)
+                    ) * 6
+                )
+            );
+            const centerMargin = 60; // 中心区域的边距
+
+            // 重新计算布局，确保文本有足够空间且图表居中
+            const totalGraphWidth = width - maxSentimentTextWidth - maxEtapeTextWidth - centerMargin * 2;
+            const layerWidth = Math.max(200, totalGraphWidth / 2); // 确保层间距离合理
+
+            // Disposition en couches
+            const sentimentNodes = nodes.filter(n => n.category === 'sentiment');
+            const dimensionNodes = nodes.filter(n => n.category === 'dimension');
+            const etapeNodes = nodes.filter(n => n.category === 'etape');
+
+            // 根据节点数量动态扩展画布高度，避免底部被裁剪
+            const maxLayerCount = Math.max(sentimentNodes.length, dimensionNodes.length, etapeNodes.length);
+            const minNodeHeight = 12;
+            const verticalMargins = 40; // 与 y 定位中的 20 顶部边距、底部预留一致
+            const requiredHeight = verticalMargins + maxLayerCount * minNodeHeight + (maxLayerCount - 1) * nodePadding;
+            const computedHeight = Math.max(height, requiredHeight);
+            
+            const layerHeight = computedHeight - 40; // Réduire les marges supérieure et inférieure
+
+            // Calcul de la position y de chaque nœud de couche
+            const calculateNodePositions = (layerNodes, x) => {
+                const nodeHeight = Math.max(12, (layerHeight - (layerNodes.length - 1) * nodePadding) / layerNodes.length);
+                return layerNodes.map((node, i) => ({
+                    ...node,
+                    x,
+                    y: 20 + i * (nodeHeight + nodePadding), // Réduire la marge supérieure
+                    width: nodeWidth,
+                    height: nodeHeight
+                }));
+            };
+
+            // 重新定位节点，确保居中且为文本留出足够空间
+            const startX = maxSentimentTextWidth + centerMargin; // 从左侧文本区域后开始
+            const positionedNodes = [
+                ...calculateNodePositions(sentimentNodes, startX),
+                ...calculateNodePositions(dimensionNodes, startX + layerWidth),
+                ...calculateNodePositions(etapeNodes, startX + 2 * layerWidth)
+            ];
+
+            // Gestion des événements de souris
+            const handleNodeMouseEnter = (node, event) => {
+                setHoveredNode(node.name);
+                const dimensionInfo = data.dimensionCategories[node.name];
+
+                // 计算当前节点的进入和出去连接数量
+                const nodeIndex = positionedNodes.findIndex(n => n.name === node.name);
+                const incomingLinks = links.filter(link => link.target === nodeIndex);
+                const outgoingLinks = links.filter(link => link.source === nodeIndex);
+
+                // 计算总的连接值
+                const incomingCount = incomingLinks.reduce((sum, link) => sum + link.value, 0);
+                const outgoingCount = outgoingLinks.reduce((sum, link) => sum + link.value, 0);
+
+                let content = '';
+                if (node.category === 'dimension' && dimensionInfo) {
+                    content = `${node.name}: ${dimensionInfo.name}\nConnexions entrantes: ${incomingCount}\nConnexions sortantes: ${outgoingCount}`;
+                } else if (node.category === 'sentiment') {
+                    content = `Sentiment: ${node.name}\nConnexions sortantes: ${outgoingCount}`;
+                } else if (node.category === 'etape') {
+                    content = `${node.name}\nConnexions entrantes: ${incomingCount}`;
+                }
+
+                setTooltip({
+                    visible: true,
+                    x: event.clientX + 10,
+                    y: event.clientY - 10,
+                    content: content
+                });
+            };
+
+            const handleNodeMouseLeave = () => {
+                setHoveredNode(null);
+                setTooltip({ visible: false, x: 0, y: 0, content: '' });
+            };
+
+            const handleLinkMouseEnter = (link, event) => {
+                setHoveredLink(link);
+                const sourceNode = positionedNodes[link.source];
+                const targetNode = positionedNodes[link.target];
+                setTooltip({
+                    visible: true,
+                    x: event.clientX + 10,
+                    y: event.clientY - 10,
+                    content: `${sourceNode.name} → ${targetNode.name}\nIntensité de connexion: ${link.value}`
+                });
+            };
+
+            const handleLinkMouseLeave = () => {
+                setHoveredLink(null);
+                setTooltip({ visible: false, x: 0, y: 0, content: '' });
+            };
+
+            // Déterminer si les nœuds ou les connexions doivent être mis en surbrillance ou assombris
+            const isNodeHighlighted = (node) => {
+                if (!hoveredNode && !hoveredLink) return false;
+                if (hoveredNode === node.name) return true;
+                if (hoveredLink) {
+                    const sourceNode = positionedNodes[hoveredLink.source];
+                    const targetNode = positionedNodes[hoveredLink.target];
+                    return node.name === sourceNode.name || node.name === targetNode.name;
+                }
+                return false;
+            };
+
+            const isNodeDimmed = (node) => {
+                if (!hoveredNode && !hoveredLink) return false;
+                return !isNodeHighlighted(node);
+            };
+
+            const isLinkHighlighted = (link) => {
+                if (!hoveredNode && !hoveredLink) return false;
+                if (hoveredLink === link) return true;
+                if (hoveredNode) {
+                    const sourceNode = positionedNodes[link.source];
+                    const targetNode = positionedNodes[link.target];
+                    return hoveredNode === sourceNode.name || hoveredNode === targetNode.name;
+                }
+                return false;
+            };
+
+            const isLinkDimmed = (link) => {
+                if (!hoveredNode && !hoveredLink) return false;
+                return !isLinkHighlighted(link);
+            };
+            
+            return (
+                <div className="svg-container" ref={containerRef}>
+                    <svg
+                        key={`${nodes.length}-${links.length}`}
+                        width={width}
+                        height={computedHeight}
+                        viewBox={`0 0 ${width} ${computedHeight}`}
+                        preserveAspectRatio="xMidYMid meet"
+                        style={{
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            display: 'block',
+                            maxWidth: '100%',
+                            height: 'auto',
+                            overflow: 'visible'
+                        }}
+                    >
+                        {/* Dessiner les lignes de connexion */}
+                        {links.map((link, i) => {
+                            const sourceNode = positionedNodes[link.source];
+                            const targetNode = positionedNodes[link.target];
+                            const strokeWidth = Math.max(1, Math.min(15, link.value * 1.5));
+                            const isHighlighted = isLinkHighlighted(link);
+                            const isDimmed = isLinkDimmed(link);
+
+                            // control points
+                            const x1 = sourceNode.x + sourceNode.width;
+                            const y1 = sourceNode.y + sourceNode.height/2;
+                            const cx1 = sourceNode.x + sourceNode.width + layerWidth/2;
+                            const cy1 = y1;
+                            const cx2 = targetNode.x - layerWidth/2;
+                            const cy2 = targetNode.y + targetNode.height/2;
+                            const x2 = targetNode.x;
+                            const y2 = cy2;
+
+                            const d = `M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
+
+                            // Compute midpoint on cubic Bezier (t=0.5)
+                            const t = 0.5;
+                            const oneMinusT = 1 - t;
+                            const midX = oneMinusT**3 * x1 + 3 * oneMinusT**2 * t * cx1 + 3 * oneMinusT * t**2 * cx2 + t**3 * x2;
+                            const midY = oneMinusT**3 * y1 + 3 * oneMinusT**2 * t * cy1 + 3 * oneMinusT * t**2 * cy2 + t**3 * y2;
+
+                            return (
+                                <g key={i}>
+                                    <path
+                                        className={`connection-path ${link.connectionType || ''} ${isHighlighted ? 'highlighted' : ''} ${isDimmed ? 'dimmed' : ''}`}
+                                        d={d}
+                                        fill="none"
+                                        stroke={sourceNode.color || targetNode.color || '#8884d8'}
+                                        strokeWidth={isHighlighted ? Math.max(3, strokeWidth) : strokeWidth}
+                                        onMouseEnter={(e) => handleLinkMouseEnter(link, e)}
+                                        onMouseLeave={handleLinkMouseLeave}
+                                    />
+                                    {link.connectionType === 'dimension-to-stage' && link.label && isHighlighted && (
+                                        <text
+                                            className={`link-label ${isDimmed ? 'dimmed' : ''}`}
+                                            x={midX}
+                                            y={midY - 6}
+                                            textAnchor="middle"
+                                            dominantBaseline="ideographic"
+                                        >
+                                            {link.label}
+                                        </text>
+                                    )}
+                                </g>
+                            );
+                        })}
+                        
+                        {/* Dessiner les nœuds */}
+                        {positionedNodes.map((node, i) => {
+                            const isHighlighted = isNodeHighlighted(node);
+                            const isDimmed = isNodeDimmed(node);
+                            const dimensionInfo = data.dimensionCategories[node.name];
+
+
+                            return (
+                                <g key={i}>
+                                    <rect
+                                        className={`node-rect ${isHighlighted ? 'highlighted' : ''} ${isDimmed ? 'dimmed' : ''}`}
+                                        x={node.x}
+                                        y={node.y}
+                                        width={node.width}
+                                        height={node.height}
+                                        fill={node.color || (node.category === 'sentiment' ? '#333' :
+                                              node.category === 'etape' ? '#666' : '#999')}
+                                        stroke="#fff"
+                                        strokeWidth={isHighlighted ? 3 : 1}
+                                        onMouseEnter={(e) => handleNodeMouseEnter(node, e)}
+                                        onMouseLeave={handleNodeMouseLeave}
+                                    />
+                                    <text
+                                        x={node.category === 'sentiment' ? node.x - 10 :
+                                          node.category === 'etape' ? node.x + node.width + 10 :
+                                          node.x + node.width/2}
+                                        y={node.y + node.height/2 - (dimensionInfo ? 6 : 0)}
+                                        textAnchor={node.category === 'sentiment' ? 'end' :
+                                                   node.category === 'etape' ? 'start' : 'middle'}
+                                        dominantBaseline="middle"
+                                        className={`node-text ${isDimmed ? 'dimmed' : ''}`}
+                                        style={{fontSize: node.category === 'dimension' ? '10px' : node.category === 'sentiment' ? '9px' : '10px'}}
+                                    >
+                                        {node.category === 'dimension' && dimensionInfo ?
+                                            `${node.name}: ${dimensionInfo.name}` :
+                                         node.name}
+                                    </text>
+                                    {node.category === 'dimension' && dimensionInfo && (
+                                        <text
+                                            x={node.x + node.width/2}
+                                            y={node.y + node.height/2 + 8}
+                                            textAnchor="middle"
+                                            dominantBaseline="middle"
+                                            className={`node-text ${isDimmed ? 'dimmed' : ''}`}
+                                            style={{fontSize: '9px', fill: '#666'}}
+                                        >
+                                        </text>
+                                    )}
+                                </g>
+                            );
+                        })}
+                    </svg>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<SankeyChart />, document.getElementById('root'));
+    </script>
+</body>
+</html>
