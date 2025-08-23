@@ -359,9 +359,6 @@ I4c-I6b
 I4c-Pe2a
 I4c-I4a
 I5-I4a-Pe3a
-I4c-Pe2a
-I4c-I4a
-I5-I4a-Pe3a
 I4c-I4b
 I4c-I2
 I4c-I3
@@ -721,22 +718,12 @@ I4a-Pe1
         }
 
         function handleMouseOver(event, d) {
-            // Calculate incoming and outgoing connections
+            // Calculate incoming and outgoing counts for tooltip
             let incomingCount = 0;
             let outgoingCount = 0;
-            const connectedNodes = new Set();
-
             links.forEach(link => {
-                if (link.source.id === d.id) {
-                    outgoingCount++;
-                    connectedNodes.add(link.source.id);
-                    connectedNodes.add(link.target.id);
-                }
-                if (link.target.id === d.id) {
-                    incomingCount++;
-                    connectedNodes.add(link.source.id);
-                    connectedNodes.add(link.target.id);
-                }
+                if (link.source.id === d.id) outgoingCount++;
+                if (link.target.id === d.id) incomingCount++;
             });
 
             tooltip
@@ -751,26 +738,8 @@ I4a-Pe1
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY - 10) + "px");
 
-            // Fade out non-connected nodes and their labels
-            node.style("opacity", n => connectedNodes.has(n.id) ? 1 : 0.2)
-                .style("stroke-width", n => n.id === d.id ? 4 : 2)
-                .style("stroke", n => n.id === d.id ? "#ff6b6b" : "#fff");
-            
-            // Fade out non-connected node labels
-            labels.style("opacity", n => connectedNodes.has(n.id) ? 1 : 0.2)
-                  .style("font-weight", n => n.id === d.id ? "bold" : "normal")
-                  .style("font-size", n => n.id === d.id ? "10px" : "8px");
-            
-            // Highlight connected links
-            link.style("opacity", l =>
-                (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1
-            ).style("stroke-width", l =>
-                (l.source.id === d.id || l.target.id === d.id) ? "2px" : "1px"
-            ).style("stroke", l =>
-                (l.source.id === d.id || l.target.id === d.id) ? "#ff6b6b" : "#999"
-            ).style("marker-end", l =>
-                (l.source.id === d.id || l.target.id === d.id) ? "url(#arrowhead-highlight)" : "url(#arrowhead)"
-            );
+            // Highlight all chains starting from this node
+            highlightFromNode(d.id);
         }
 
         function handleMouseOut() {
@@ -795,6 +764,8 @@ I4a-Pe1
             // Reapply hub styles if enabled
             updateHubStyles();
         }
+
+        // Click selection removed; hover controls highlighting now
 
         // Search functionality
         let currentSearchResults = [];
@@ -934,6 +905,62 @@ I4a-Pe1
                 });
         }
 
+        // Highlight all chains that start from a given node (e.g., I5 → ...)
+        function highlightFromNode(nodeId) {
+            const lines = rawRelations.split(/\n+/).map(l => l.trim()).filter(Boolean);
+            const relevantChains = lines
+                .map(line => line.replace(/\s+/g, ''))
+                .filter(line => {
+                    const parts = line.split('-').filter(Boolean);
+                    return parts.length > 1 && parts[0] === nodeId;
+                });
+
+            if (relevantChains.length === 0) {
+                const targetNode = nodes.find(n => n.id === nodeId);
+                if (targetNode) highlightNode(targetNode);
+                return;
+            }
+
+            const nodeSet = new Set();
+            const pairSet = new Set();
+            relevantChains.forEach(chain => {
+                const parts = chain.split('-').filter(Boolean);
+                parts.forEach(p => nodeSet.add(p));
+                for (let i = 0; i < parts.length - 1; i++) {
+                    pairSet.add(`${parts[i]}->${parts[i+1]}`);
+                }
+            });
+
+            node.style("opacity", n => nodeSet.has(n.id) ? 1 : 0.1)
+                .style("stroke-width", n => n.id === nodeId ? 4 : (nodeSet.has(n.id) ? 3 : 2))
+                .style("stroke", n => nodeSet.has(n.id) ? "#ff6b6b" : "#fff");
+
+            labels.style("opacity", n => nodeSet.has(n.id) ? 1 : 0.2)
+                  .style("font-weight", n => n.id === nodeId ? "bold" : (nodeSet.has(n.id) ? "bold" : "normal"))
+                  .style("font-size", n => n.id === nodeId ? "10px" : "8px");
+
+            link.style("opacity", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? 1 : 0.05;
+                })
+                .style("stroke-width", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "2px" : "1px";
+                })
+                .style("stroke", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "#ff6b6b" : "#999";
+                })
+                .style("marker-end", l => {
+                    const sid = typeof l.source === 'string' ? l.source : l.source.id;
+                    const tid = typeof l.target === 'string' ? l.target : l.target.id;
+                    return pairSet.has(`${sid}->${tid}`) ? "url(#arrowhead-highlight)" : "url(#arrowhead)";
+                });
+        }
+
         function clearHighlight() {
             highlightedNodes.clear();
             node.style("opacity", 1)
@@ -1036,3 +1063,4 @@ I4a-Pe1
     </script>
 </body>
 </html>
+
